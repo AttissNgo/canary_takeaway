@@ -76,6 +76,12 @@ contract Staker is ERC721 {
                            Staking & Claims
     //////////////////////////////////////////////////////////////*/  
 
+    /**
+     * @notice accepts approved ERC20 token and mints an equivalent amount of st-Tokens
+     * @param token ERC20 token to stake
+     * @param amount amount of token to stake
+     * @param isExpress selects express or standard withdraw notice period 
+     */
     function deposit(address token, uint256 amount, bool isExpress) external { 
         if (paused) {
             revert Staker__Paused();
@@ -95,6 +101,13 @@ contract Staker is ERC721 {
         emit Deposit(msg.sender, token, stToken, amount);
     }
 
+    /**
+     * @notice burns st-Tokens and mints a Claim token to user
+     * @notice Claim token may be redeemed for staked asset + yield accrued after withdraw notice period
+     * @param stToken address of st-Token to burn for underlying asset
+     * @param amount amount of st-Token 
+     * @return claimId - tokenId for Claim token
+     */
     function requestWithdraw(address stToken, uint256 amount) external returns (uint256 claimId) {
         IStToken token = IStToken(stToken);
         address asset = token.underlyingAsset();
@@ -126,6 +139,10 @@ contract Staker is ERC721 {
         emit WithdrawRequested(msg.sender, totalWithdraw, claimId);
     }
 
+    /**
+     * @notice burns Claim token if after withdraw notice period and returns ERC20 stake + yield earned
+     * @param claimId tokenId of Claim token to redeem
+     */
     function claim(uint256 claimId) external {
         _requireOwned(claimId);
         if (msg.sender != ownerOf(claimId)) {
@@ -155,13 +172,11 @@ contract Staker is ERC721 {
                            Admin functions
     //////////////////////////////////////////////////////////////*/
     
-    function adminYieldDeposit(address[] calldata tokens, uint256[] calldata amounts) external onlyAdmin {
-        // check arrays are the same length 
-        // check tokens are approved
-        // weekly???
-        // transfer tokens from admin 
-    }
+    // function adminYieldDeposit(address[] calldata tokens, uint256[] calldata amounts) external onlyAdmin {}
     
+    /**
+     * @notice pauses deposit functionality so contract will not accept new stakes
+     */ 
     function pause() external onlyAdmin {
         if (!paused) {
             paused = true;
@@ -169,6 +184,9 @@ contract Staker is ERC721 {
         }
     }
 
+    /**
+     * @notice resumes deposit functionality
+     */
     function unpause() external onlyAdmin {
         if (paused) {
             paused = false;
@@ -176,10 +194,17 @@ contract Staker is ERC721 {
         }
     }
 
-    // function approveERC20(ERC20 token, uint256 expressNotice, uint256 standardNotice) external onlyAdmin {
-    //     _approveERC20(token, expressNotice, standardNotice);
-    // }
+    function approveERC20(ERC20 token, uint256 expressNotice, uint256 standardNotice) external onlyAdmin {
+        _approveERC20(token, expressNotice, standardNotice);
+    }
 
+    /**
+     * @notice deploys a pair of st-Tokens for given underlying asset and stores addresses in `stakeTokens` mapping   
+     * @notice only one st-Token pair per underlying asset can exist
+     * @param token underlying ERC20 token
+     * @param expressNotice withdraw notice period length in seconds for express st-Token
+     * @param standardNotice withdraw notice period length in seconds for standard st-Token
+     */
     function _approveERC20(ERC20 token, uint256 expressNotice, uint256 standardNotice) private {
         // control notice period inputs more??
         require(standardNotice > expressNotice);
@@ -191,6 +216,14 @@ contract Staker is ERC721 {
         stTokens.standardNotice = _deployStToken(token.name(), token.symbol(), address(token), standardNotice, token.decimals());
     }
 
+    /**
+     * @notice deploys st-Token contract 
+     * @param underlyingName name of underlying ERC20
+     * @param underlyingSymbol symbol of underlying ERC20
+     * @param underlyingAsset address of underlying ERC20 contract
+     * @param noticePeriod withdraw notice period length in seconds
+     * @param underlyingDecimals decimals of underlying ERC20 contract
+     */
     function _deployStToken(
         string memory underlyingName,
         string memory underlyingSymbol,

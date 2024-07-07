@@ -27,6 +27,8 @@ contract BaseTest is Test {
     address public admin;
     address[] public users = [alice, bob];
 
+    address public whale = 0x40ec5B33f54e0E8A33A975908C5BA1c14e5BbbDf; // Polygon's ERC20 Bridge contract address on Ethereum Mainnet,
+
     modifier userDeposits() {
         for (uint i; i < users.length; ++i) {
             uint256 daiAmount = dai.balanceOf(users[i]) / 2;
@@ -59,10 +61,20 @@ contract BaseTest is Test {
     }
 
     function _supplyERC20() internal {
-        for (uint i; i < users.length; ++i) {
-            dai.mint(users[i], INITIAL_USER_DAI);
-            usdc.mint(users[i], INITIAL_USER_USDC);
+        if (block.chainid == 31337) {
+            for (uint i; i < users.length; ++i) {
+                dai.mint(users[i], INITIAL_USER_DAI);
+                usdc.mint(users[i], INITIAL_USER_USDC);
+            }
+        } else if (block.chainid == 1) {
+            for(uint i; i < users.length; ++i) {
+                vm.startPrank(whale);
+                dai.transfer(users[i], INITIAL_USER_DAI);
+                usdc.transfer(users[i], INITIAL_USER_USDC);
+                vm.stopPrank();
+            }
         }
+        
     }
 
     function _setStTokens() internal {

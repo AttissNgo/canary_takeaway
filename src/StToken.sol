@@ -47,51 +47,61 @@ contract StToken is ERC20 {
         return underlyingDecimals;
     }
 
+    /**
+     * @notice called by Staker when user stakes underlying ERC20 via `deposit()`
+     * @param account user
+     * @param value amount of ERC20 tokens staked
+     */
     function mint(address account, uint256 value) external onlyStaker {
         _mint(account, value);
     }
 
+    /**
+     * @notice called by Staker when user un-stakes underlying ERC20 via `requestWithdraw()`
+     * @param account user
+     * @param value amount of ERC20 tokens withdrawn (0 when user wants to withdraw only yield earned but leave priciple staked)
+     */
     function burn(address account, uint256 value) external onlyStaker {
         _burn(account, value);
-        // delete the yield that is being withdrawn (even if withdraw is 0??!!)
     }
 
+    /**
+     * @notice updates Yield for all accounts involved in transfer before updating balances via _update()
+     * @notice stores yield earned since last update and updates Yield.lastupdate to current block timestamp
+     * @notice if burn, Yield.yieldAccrued will be set to zero as all yield will be realized in Claim NFT in Staker
+     * @param from sender
+     * @param to recipient
+     * @param value amount of tokens
+     */
     function _update(address from, address to, uint256 value) internal override {
         if (from != address(0) && to != address(0)) { // not a burn
-            _updateYield(from);
+            _updateYield(from, false);
         }
         if (to != address(0)) {
-            _updateYield(to);
+            _updateYield(to, false);
         }
         if (to == address(0)) { // if burn, set yield to zero as user MUST withdraw all yield when burning (even 0 amount)
-            // _yieldWithdraw(from);
-            delete yields[from];
-            emit YieldUpdated(from, 0); // might need a unique event for claims
+            _updateYield(from, true);
         }
         super._update(from, to, value);
     }
 
-    function _updateYield(address account) internal {
-        // Yield memory yield = yields[account];
-        // uint256 yieldEarned = yieldEarnedSinceUpdate(account);
-        // if (yieldEarned > 0 || yield.lastUpdate == 0) { // if there is yield or if this is mint
-        //     yield.yieldAccrued += yieldEarned;
-        //     yield.lastUpdate = block.timestamp;
-        //     yields[account] = yield;    
-        // }
+    function _updateYield(address account, bool isBurn) internal {
         Yield storage yield = yields[account];
-        uint256 yieldEarned = yieldEarnedSinceUpdate(account);
-        if (yieldEarned > 0) {
-            yield.yieldAccrued += yieldEarned;
+        if (!isBurn) {
+            uint256 yieldEarned = yieldEarnedSinceUpdate(account);
+            yield.yieldAccrued += yieldEarned;  
+        } else {
+            yield.yieldAccrued = 0;
         }
         yield.lastUpdate = block.timestamp;
         emit YieldUpdated(account, yield.yieldAccrued);
+        
     }
 
-    // function _yieldWithdraw(address account) internal {
-    //     delete yields[account];
-    // }
-
+    /**
+     * @notice calculates yield earned for `account` since last update (last mint, transfer or burn)
+     */
     function yieldEarnedSinceUpdate(address account) public view returns (uint256) {
         Yield memory yield = yields[account];
         uint256 secondsPassedSinceUpdate = block.timestamp - yield.lastUpdate;
